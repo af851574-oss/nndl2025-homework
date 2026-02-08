@@ -663,11 +663,15 @@ async function predict() {
 
         // Create prediction results
         // Note: predValues is 2D array [[val1], [val2], ...], so access predValues[i][0]
-        const results = preprocessedTestData.passengerIds.map((id, i) => ({
-            PassengerId: id,
-            Survived: predValues[i][0] >= 0.5 ? 1 : 0,
-            Probability: predValues[i][0]
-        }));
+        const results = preprocessedTestData.passengerIds.map((id, i) => {
+            // Handle both 1D and 2D array formats
+            const prob = Array.isArray(predValues[i]) ? predValues[i][0] : predValues[i];
+            return {
+                PassengerId: id,
+                Survived: prob >= 0.5 ? 1 : 0,
+                Probability: Number(prob) // Ensure it's a number
+            };
+        });
         
         // Show first 10 predictions
         outputDiv.innerHTML = '<h3>Prediction Results (First 10 Rows)</h3>';
@@ -701,7 +705,13 @@ function createPredictionTable(data) {
         const tr = document.createElement('tr');
         ['PassengerId', 'Survived', 'Probability'].forEach(key => {
             const td = document.createElement('td');
-            td.textContent = key === 'Probability' ? row[key].toFixed(4) : row[key];
+            const value = row[key];
+            // Format probability with defensive check
+            if (key === 'Probability') {
+                td.textContent = typeof value === 'number' ? value.toFixed(4) : String(value);
+            } else {
+                td.textContent = value;
+            }
             tr.appendChild(td);
         });
         table.appendChild(tr);
@@ -805,13 +815,15 @@ async function exportResults() {
         // Create submission CSV (PassengerId, Survived)
         let submissionCSV = 'PassengerId,Survived\n';
         preprocessedTestData.passengerIds.forEach((id, i) => {
-            submissionCSV += `${id},${predValues[i][0] >= 0.5 ? 1 : 0}\n`;
+            const prob = Array.isArray(predValues[i]) ? predValues[i][0] : predValues[i];
+            submissionCSV += `${id},${prob >= 0.5 ? 1 : 0}\n`;
         });
 
         // Create probabilities CSV (PassengerId, Probability)
         let probabilitiesCSV = 'PassengerId,Probability\n';
         preprocessedTestData.passengerIds.forEach((id, i) => {
-            probabilitiesCSV += `${id},${predValues[i][0].toFixed(6)}\n`;
+            const prob = Array.isArray(predValues[i]) ? predValues[i][0] : predValues[i];
+            probabilitiesCSV += `${id},${Number(prob).toFixed(6)}\n`;
         });
         
         // Create download links
