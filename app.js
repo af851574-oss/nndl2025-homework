@@ -616,6 +616,9 @@ async function plotROC(trueLabels, predictions) {
         rocData.push({ threshold, fpr, tpr });
     });
     
+    // Sort ROC data by FPR (ascending) for correct AUC calculation
+    rocData.sort((a, b) => a.fpr - b.fpr);
+
     // Calculate AUC (approximate using trapezoidal rule)
     let auc = 0;
     for (let i = 1; i < rocData.length; i++) {
