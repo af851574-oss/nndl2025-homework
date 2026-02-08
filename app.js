@@ -657,12 +657,13 @@ async function predict() {
         // Make predictions
         testPredictions = model.predict(testFeatures);
         const predValues = testPredictions.arraySync();
-        
+
         // Create prediction results
+        // Note: predValues is 2D array [[val1], [val2], ...], so access predValues[i][0]
         const results = preprocessedTestData.passengerIds.map((id, i) => ({
             PassengerId: id,
-            Survived: predValues[i] >= 0.5 ? 1 : 0,
-            Probability: predValues[i]
+            Survived: predValues[i][0] >= 0.5 ? 1 : 0,
+            Probability: predValues[i][0]
         }));
         
         // Show first 10 predictions
@@ -801,13 +802,13 @@ async function exportResults() {
         // Create submission CSV (PassengerId, Survived)
         let submissionCSV = 'PassengerId,Survived\n';
         preprocessedTestData.passengerIds.forEach((id, i) => {
-            submissionCSV += `${id},${predValues[i] >= 0.5 ? 1 : 0}\n`;
+            submissionCSV += `${id},${predValues[i][0] >= 0.5 ? 1 : 0}\n`;
         });
-        
+
         // Create probabilities CSV (PassengerId, Probability)
         let probabilitiesCSV = 'PassengerId,Probability\n';
         preprocessedTestData.passengerIds.forEach((id, i) => {
-            probabilitiesCSV += `${id},${predValues[i].toFixed(6)}\n`;
+            probabilitiesCSV += `${id},${predValues[i][0].toFixed(6)}\n`;
         });
         
         // Create download links
