@@ -205,13 +205,13 @@ function createVisualizations() {
     });
     
     const sexData = Object.entries(survivalBySex).map(([sex, stats]) => ({
-        sex,
-        survivalRate: (stats.survived / stats.total) * 100
+        index: sex,
+        value: (stats.survived / stats.total) * 100
     }));
-    
+
     tfvis.render.barchart(
         { name: 'Survival Rate by Sex', tab: 'Charts' },
-        sexData.map(d => ({ x: d.sex, y: d.survivalRate })),
+        sexData,
         { xLabel: 'Sex', yLabel: 'Survival Rate (%)' }
     );
     
@@ -230,13 +230,13 @@ function createVisualizations() {
     });
     
     const pclassData = Object.entries(survivalByPclass).map(([pclass, stats]) => ({
-        pclass: `Class ${pclass}`,
-        survivalRate: (stats.survived / stats.total) * 100
+        index: `Class ${pclass}`,
+        value: (stats.survived / stats.total) * 100
     }));
-    
+
     tfvis.render.barchart(
         { name: 'Survival Rate by Passenger Class', tab: 'Charts' },
-        pclassData.map(d => ({ x: d.pclass, y: d.survivalRate })),
+        pclassData,
         { xLabel: 'Passenger Class', yLabel: 'Survival Rate (%)' }
     );
     
