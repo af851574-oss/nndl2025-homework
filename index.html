@@ -6,7 +6,7 @@
     <title>Titanic Survival Classifier - TensorFlow.js</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
-    <script src="app.js"></script>
+    <script src="app.js" defer></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -79,33 +79,17 @@
         th {
             background-color: #f2f2f2;
         }
-        tr.high-importance {
-            background-color: #e8f5e9;
-        }
-        tr.medium-importance {
-            background-color: #fff9c4;
-        }
-        tr.low-importance {
-            background-color: #ffebee;
-        }
-        .importance-bar {
-            display: inline-block;
-            height: 20px;
-            background-color: #1a73e8;
-            margin-right: 5px;
-            vertical-align: middle;
+        .note {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
         }
         .feature-importance {
             margin-top: 20px;
             padding: 15px;
             background-color: #f8f9fa;
             border-radius: 5px;
-        }
-        .note {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
         }
         @media (max-width: 768px) {
             .metrics-container {
@@ -157,8 +141,9 @@
             <h2>4. Model Setup</h2>
             <button id="create-model-btn" onclick="createModel()" disabled>Create Model</button>
             <div id="model-summary"></div>
+            <!-- Кнопка для анализа важности признаков -->
             <button id="importance-btn" onclick="analyzeFeatureImportance()" disabled style="background-color: #4CAF50; margin-top: 10px;">
-                Analyze Feature Importance
+                Analyze Feature Importance (Sigmoid Gate)
             </button>
             <div id="importance-output" class="feature-importance"></div>
         </section>
