@@ -79,6 +79,22 @@
         th {
             background-color: #f2f2f2;
         }
+        tr.high-importance {
+            background-color: #e8f5e9;
+        }
+        tr.medium-importance {
+            background-color: #fff9c4;
+        }
+        tr.low-importance {
+            background-color: #ffebee;
+        }
+        .importance-bar {
+            display: inline-block;
+            height: 20px;
+            background-color: #1a73e8;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
         .note {
             background-color: #f8f9fa;
             padding: 15px;
@@ -144,8 +160,17 @@
             <div id="training-vis"></div>
         </section>
 
+        <section id="feature-importance">
+            <h2>6. Feature Importance (Sigmoid Gate)</h2>
+            <div id="feature-importance-output"></div>
+            <div class="note">
+                <p><strong>About Feature Importance:</strong> The sigmoid gate layer learns which features are most important for prediction.
+                Higher scores (closer to 1.0) indicate features the model relies on more heavily, while lower scores (closer to 0.0) indicate less important features.</p>
+            </div>
+        </section>
+
         <section id="metrics">
-            <h2>6. Evaluation Metrics</h2>
+            <h2>7. Evaluation Metrics</h2>
             <div class="slider-container">
                 <label for="threshold-slider">Classification Threshold (for ROC curve):</label>
                 <input type="range" id="threshold-slider" class="slider" min="0" max="1" step="0.01" value="0.5" disabled>
@@ -164,13 +189,13 @@
         </section>
 
         <section id="prediction">
-            <h2>7. Prediction</h2>
+            <h2>8. Prediction</h2>
             <button id="predict-btn" onclick="predict()" disabled>Predict on Test Data</button>
             <div id="prediction-output"></div>
         </section>
 
         <section id="export">
-            <h2>8. Export Results</h2>
+            <h2>9. Export Results</h2>
             <button id="export-btn" onclick="exportResults()" disabled>Export Results</button>
             <div id="export-status"></div>
         </section>

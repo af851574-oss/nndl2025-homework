@@ -721,7 +721,7 @@ function createPredictionTable(data) {
 }
 
 // Visualize feature importance from the sigmoid gate layer
-function visualizeFeatureImportance() {
+async function visualizeFeatureImportance() {
     try {
         // Get the sigmoid gate layer (first layer after input)
         const gateLayer = model.getLayer('sigmoid_gate');
@@ -731,47 +731,76 @@ function visualizeFeatureImportance() {
             return;
         }
 
-        // Get the weights from the gate layer
-        // For a dense layer with no bias, weights shape is [inputDim, outputDim]
-        // Since inputDim = outputDim for the gate, we get a diagonal-like matrix
-        const weights = gateLayer.getWeights()[0]; // Get kernel weights
+        // Create an intermediate model that outputs gate activations
+        // This gives us the actual learned importance for each feature
+        const gateModel = tf.model({
+            inputs: model.input,
+            outputs: gateLayer.output
+        });
 
-        // Calculate feature importance: average absolute weight per feature
-        // This represents how much each feature is "gated" or weighted
-        const importanceValues = weights.arraySync();
+        // Pass validation data through the gate to get actual gate values
+        const gateActivations = gateModel.predict(validationData);
+        const gateValues = await gateActivations.arraySync();
 
-        // For each output unit (feature), calculate the importance
-        // Since it's a fully connected layer, we take the norm of weights per output feature
-        let featureImportances = [];
+        // Calculate average gate value for each feature across all samples
+        // This represents how much each feature is "opened" by the gate on average
+        const numFeatures = gateValues[0].length;
+        let featureImportances = new Array(numFeatures).fill(0);
 
-        for (let i = 0; i < importanceValues[0].length; i++) {
-            let importance = 0;
-            for (let j = 0; j < importanceValues.length; j++) {
-                importance += Math.abs(importanceValues[j][i]);
+        for (let i = 0; i < gateValues.length; i++) {
+            for (let j = 0; j < numFeatures; j++) {
+                featureImportances[j] += gateValues[i][j];
             }
-            featureImportances.push(importance / importanceValues.length);
         }
 
-        // Normalize to [0, 1] range
-        const maxImportance = Math.max(...featureImportances);
-        featureImportances = featureImportances.map(val => val / maxImportance);
+        // Average across all samples
+        featureImportances = featureImportances.map(val => val / gateValues.length);
 
         // Prepare data for visualization
         const importanceData = featureNames.map((name, i) => ({
+            rank: i + 1,
             feature: name,
-            importance: isNaN(featureImportances[i]) ? 0 : featureImportances[i]
+            importance: isNaN(featureImportances[i]) ? 0 : featureImportances[i],
+            percentage: isNaN(featureImportances[i]) ? 0 : (featureImportances[i] * 100)
         }));
 
         // Sort by importance (descending)
         importanceData.sort((a, b) => b.importance - a.importance);
 
+        // Update rank after sorting
+        importanceData.forEach((d, i) => d.rank = i + 1);
+
         // Validate data before visualization
-        if (importanceData.length === 0 || importanceData.every(d => d.importance === 0)) {
+        if (importanceData.length === 0) {
             console.warn('No valid feature importance data to display');
             return;
         }
 
-        // Visualize with tfjs-vis
+        // Display in main window as a table (like Prediction Results)
+        const outputDiv = document.getElementById('feature-importance-output');
+        outputDiv.innerHTML = '<h3>Feature Importance Analysis</h3>';
+        outputDiv.innerHTML += '<p>Showing importance scores for all features (sorted by importance):</p>';
+
+        const table = createFeatureImportanceTable(importanceData);
+        outputDiv.appendChild(table);
+
+        // Show statistics
+        const avgImportance = importanceData.reduce((sum, d) => sum + d.importance, 0) / importanceData.length;
+        const maxImportance = Math.max(...importanceData.map(d => d.importance));
+        const minImportance = Math.min(...importanceData.map(d => d.importance));
+
+        outputDiv.innerHTML += `
+            <div class="note">
+                <p><strong>Statistics:</strong></p>
+                <ul>
+                    <li>Maximum Importance: ${maxImportance.toFixed(4)} (${(maxImportance * 100).toFixed(2)}%)</li>
+                    <li>Minimum Importance: ${minImportance.toFixed(4)} (${(minImportance * 100).toFixed(2)}%)</li>
+                    <li>Average Importance: ${avgImportance.toFixed(4)} (${(avgImportance * 100).toFixed(2)}%)</li>
+                </ul>
+            </div>
+        `;
+
+        // Also visualize with tfjs-vis chart
         tfvis.render.barchart(
             { name: 'Feature Importance (Sigmoid Gate)', tab: 'Feature Importance' },
             importanceData.map(d => ({ index: d.feature, value: d.importance })),
@@ -783,26 +812,81 @@ function visualizeFeatureImportance() {
             }
         );
 
-        // Also display top 5 features in the UI
-        const topFeatures = importanceData.slice(0, 5);
-        let topFeaturesHTML = '<h3>Top 5 Most Important Features</h3><ol>';
-        topFeatures.forEach(d => {
-            const importanceValue = typeof d.importance === 'number' ? d.importance.toFixed(4) : '0.0000';
-            topFeaturesHTML += `<li><strong>${d.feature}</strong>: ${importanceValue}</li>`;
-        });
-        topFeaturesHTML += '</ol>';
-
-        // Add to model summary section
-        const summaryDiv = document.getElementById('model-summary');
-        summaryDiv.innerHTML += topFeaturesHTML;
-
         // Store gate weights globally for later analysis
         gateWeights = featureImportances;
+
+        // Clean up tensors
+        gateActivations.dispose();
 
         console.log('Feature Importance:', importanceData);
     } catch (error) {
         console.error('Error visualizing feature importance:', error);
+        const outputDiv = document.getElementById('feature-importance-output');
+        outputDiv.innerHTML = `<p style="color: red;">Error calculating feature importance: ${error.message}</p>`;
     }
+}
+
+// Create feature importance table with visual bars
+function createFeatureImportanceTable(data) {
+    const table = document.createElement('table');
+
+    // Create header row
+    const headerRow = document.createElement('tr');
+    ['Rank', 'Feature Name', 'Importance Score', 'Percentage', 'Visual'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    table.appendChild(headerRow);
+
+    // Create data rows
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+
+        // Add importance-based class for row highlighting
+        if (row.importance >= 0.7) {
+            tr.className = 'high-importance';
+        } else if (row.importance >= 0.4) {
+            tr.className = 'medium-importance';
+        } else {
+            tr.className = 'low-importance';
+        }
+
+        // Rank
+        const rankTd = document.createElement('td');
+        rankTd.textContent = row.rank;
+        tr.appendChild(rankTd);
+
+        // Feature name
+        const featureTd = document.createElement('td');
+        featureTd.textContent = row.feature;
+        featureTd.style.fontWeight = 'bold';
+        tr.appendChild(featureTd);
+
+        // Importance score
+        const importanceTd = document.createElement('td');
+        importanceTd.textContent = row.importance.toFixed(4);
+        tr.appendChild(importanceTd);
+
+        // Percentage
+        const percentTd = document.createElement('td');
+        percentTd.textContent = row.percentage.toFixed(2) + '%';
+        tr.appendChild(percentTd);
+
+        // Visual bar
+        const visualTd = document.createElement('td');
+        const barWidth = Math.max(row.percentage * 2, 5); // Scale to pixels
+        const bar = document.createElement('div');
+        bar.className = 'importance-bar';
+        bar.style.width = barWidth + 'px';
+        bar.title = `${row.percentage.toFixed(2)}%`;
+        visualTd.appendChild(bar);
+        tr.appendChild(visualTd);
+
+        table.appendChild(tr);
+    });
+
+    return table;
 }
 
 // Export results
