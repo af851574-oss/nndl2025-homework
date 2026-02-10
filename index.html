@@ -95,6 +95,12 @@
             margin-right: 5px;
             vertical-align: middle;
         }
+        .feature-importance {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
         .note {
             background-color: #f8f9fa;
             padding: 15px;
@@ -151,6 +157,10 @@
             <h2>4. Model Setup</h2>
             <button id="create-model-btn" onclick="createModel()" disabled>Create Model</button>
             <div id="model-summary"></div>
+            <button id="importance-btn" onclick="analyzeFeatureImportance()" disabled style="background-color: #4CAF50; margin-top: 10px;">
+                Analyze Feature Importance
+            </button>
+            <div id="importance-output" class="feature-importance"></div>
         </section>
 
         <section id="training">
@@ -160,17 +170,8 @@
             <div id="training-vis"></div>
         </section>
 
-        <section id="feature-importance">
-            <h2>6. Feature Importance</h2>
-            <div id="feature-importance-output"></div>
-            <div class="note">
-                <p><strong>About Feature Importance:</strong> Feature importance is calculated from the magnitude of weights in the first hidden layer.
-                Higher scores indicate features the model relies on more heavily for making predictions.</p>
-            </div>
-        </section>
-
         <section id="metrics">
-            <h2>7. Evaluation Metrics</h2>
+            <h2>6. Evaluation Metrics</h2>
             <div class="slider-container">
                 <label for="threshold-slider">Classification Threshold (for ROC curve):</label>
                 <input type="range" id="threshold-slider" class="slider" min="0" max="1" step="0.01" value="0.5" disabled>
@@ -189,13 +190,13 @@
         </section>
 
         <section id="prediction">
-            <h2>8. Prediction</h2>
+            <h2>7. Prediction</h2>
             <button id="predict-btn" onclick="predict()" disabled>Predict on Test Data</button>
             <div id="prediction-output"></div>
         </section>
 
         <section id="export">
-            <h2>9. Export Results</h2>
+            <h2>8. Export Results</h2>
             <button id="export-btn" onclick="exportResults()" disabled>Export Results</button>
             <div id="export-status"></div>
         </section>

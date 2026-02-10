@@ -10,7 +10,7 @@ let validationLabels = null;
 let validationPredictions = null;
 let testPredictions = null;
 let featureNames = []; // Store feature names for visualization
-let gateWeights = null; // Store gate weights for feature importance
+let featureImportance = {}; // Store feature importance
 
 // Schema configuration - change these for different datasets
 const TARGET_FEATURE = 'Survived'; // Binary classification target
@@ -497,15 +497,15 @@ async function trainModel() {
         // Make predictions on validation set for evaluation
         validationPredictions = model.predict(validationData);
 
-        // Extract and visualize feature importance from sigmoid gate
-        visualizeFeatureImportance();
-
         // Enable the threshold slider and evaluation
         document.getElementById('threshold-slider').disabled = false;
         document.getElementById('threshold-slider').addEventListener('input', updateMetrics);
 
         // Enable the predict button
         document.getElementById('predict-btn').disabled = false;
+
+        // Enable the feature importance button
+        document.getElementById('importance-btn').disabled = false;
 
         // Calculate initial metrics
         updateMetrics();
@@ -699,89 +699,80 @@ function createPredictionTable(data) {
     return table;
 }
 
-// Visualize feature importance from first layer weights
-async function visualizeFeatureImportance() {
+// Analyze feature importance from first layer weights
+function analyzeFeatureImportance() {
+    if (!model || featureNames.length === 0) {
+        alert('Please train the model first and ensure features are available.');
+        return;
+    }
+
+    const outputDiv = document.getElementById('importance-output');
+    outputDiv.innerHTML = 'Analyzing feature importance...';
+
     try {
-        // Get the first hidden layer
-        const hiddenLayer = model.getLayer('hidden_layer');
+        // Get weights from the first layer (input to hidden layer)
+        const weights = model.layers[0].getWeights()[0]; // Shape: [num_input_features, 16]
+        const weightArray = weights.arraySync();
 
-        if (!hiddenLayer) {
-            console.warn('Hidden layer not found');
-            return;
+        // Calculate importance for each input feature
+        featureImportance = {};
+
+        for (let i = 0; i < weightArray.length; i++) {
+            const featureWeights = weightArray[i];
+            // Calculate average absolute weight for this feature across all neurons
+            const importance = featureWeights.reduce((sum, w) => sum + Math.abs(w), 0) / featureWeights.length;
+            featureImportance[featureNames[i]] = importance;
         }
 
-        // Get the weights from the first layer [inputDim, hiddenUnits]
-        const weights = hiddenLayer.getWeights()[0];
-        const weightValues = await weights.arraySync();
+        // Sort features by importance
+        const sortedFeatures = Object.entries(featureImportance)
+            .sort((a, b) => b[1] - a[1]);
 
-        // Calculate feature importance: sum of absolute weights for each input feature
-        // Each row represents one input feature's connections to all hidden units
-        let featureImportances = [];
+        // Display results
+        let html = '<h3>Feature Importance Analysis</h3>';
+        html += '<p>Shows which features most influence the model predictions:</p>';
+        html += '<table style="width: 100%;">';
+        html += '<tr><th>Feature</th><th>Importance Score</th><th>Rank</th></tr>';
 
-        for (let i = 0; i < weightValues.length; i++) {
-            // Sum absolute values of all weights from this feature to hidden units
-            let importance = 0;
-            for (let j = 0; j < weightValues[i].length; j++) {
-                importance += Math.abs(weightValues[i][j]);
-            }
-            featureImportances.push(importance);
-        }
+        sortedFeatures.forEach(([feature, importance], index) => {
+            // Color code based on importance
+            const color = importance > 0.15 ? '#4CAF50' :
+                         importance > 0.1 ? '#8BC34A' :
+                         importance > 0.05 ? '#CDDC39' : '#FFC107';
 
-        // Normalize to [0, 1] range
-        const maxImportance = Math.max(...featureImportances);
-        if (maxImportance > 0) {
-            featureImportances = featureImportances.map(val => val / maxImportance);
-        }
+            html += `
+                <tr>
+                    <td>${feature}</td>
+                    <td>
+                        <div style="background-color: ${color}; padding: 5px; border-radius: 3px; width: ${importance * 500}px; max-width: 100%;">
+                            ${importance.toFixed(4)}
+                        </div>
+                    </td>
+                    <td>${index + 1}</td>
+                </tr>
+            `;
+        });
 
-        // Prepare data for visualization
-        const importanceData = featureNames.map((name, i) => ({
-            rank: i + 1,
-            feature: name,
-            importance: isNaN(featureImportances[i]) ? 0 : featureImportances[i],
-            percentage: isNaN(featureImportances[i]) ? 0 : (featureImportances[i] * 100)
-        }));
+        html += '</table>';
 
-        // Sort by importance (descending)
-        importanceData.sort((a, b) => b.importance - a.importance);
+        // Add interpretation
+        html += '<div style="margin-top: 20px; padding: 10px; background-color: #e8f5e9; border-radius: 5px;">';
+        html += '<h4>Interpretation:</h4>';
+        html += '<ul>';
+        html += '<li><strong>High importance (>0.15):</strong> Features with strongest influence on survival prediction</li>';
+        html += '<li><strong>Medium importance (0.05-0.15):</strong> Features with moderate influence</li>';
+        html += '<li><strong>Low importance (<0.05):</strong> Features with minimal influence</li>';
+        html += '</ul>';
+        html += `<p><strong>Top 3 most important features:</strong> ${sortedFeatures.slice(0, 3).map(f => f[0]).join(', ')}</p>`;
+        html += '</div>';
 
-        // Update rank after sorting
-        importanceData.forEach((d, i) => d.rank = i + 1);
+        outputDiv.innerHTML = html;
 
-        // Validate data before visualization
-        if (importanceData.length === 0) {
-            console.warn('No valid feature importance data to display');
-            return;
-        }
-
-        // Display in main window as a table (like Prediction Results)
-        const outputDiv = document.getElementById('feature-importance-output');
-        outputDiv.innerHTML = '<h3>Feature Importance Analysis</h3>';
-        outputDiv.innerHTML += '<p>Showing importance scores for all features based on weight magnitudes (sorted by importance):</p>';
-
-        const table = createFeatureImportanceTable(importanceData);
-        outputDiv.appendChild(table);
-
-        // Show statistics
-        const avgImportance = importanceData.reduce((sum, d) => sum + d.importance, 0) / importanceData.length;
-        const maxImp = Math.max(...importanceData.map(d => d.importance));
-        const minImp = Math.min(...importanceData.map(d => d.importance));
-
-        outputDiv.innerHTML += `
-            <div class="note">
-                <p><strong>Statistics:</strong></p>
-                <ul>
-                    <li>Maximum Importance: ${maxImp.toFixed(4)} (${(maxImp * 100).toFixed(2)}%)</li>
-                    <li>Minimum Importance: ${minImp.toFixed(4)} (${(minImp * 100).toFixed(2)}%)</li>
-                    <li>Average Importance: ${avgImportance.toFixed(4)} (${(avgImportance * 100).toFixed(2)}%)</li>
-                </ul>
-                <p><em>Method: Feature importance calculated from sum of absolute weights in the first hidden layer.</em></p>
-            </div>
-        `;
-
-        // Also visualize with tfjs-vis chart
+        // Also visualize with tfjs-vis
+        const top10 = sortedFeatures.slice(0, 10);
         tfvis.render.barchart(
-            { name: 'Feature Importance (Weight Magnitude)', tab: 'Feature Importance' },
-            importanceData.map(d => ({ index: d.feature, value: d.importance })),
+            { name: 'Top 10 Feature Importance', tab: 'Features' },
+            top10.map(([feature, importance]) => ({ index: feature, value: importance })),
             {
                 xLabel: 'Feature',
                 yLabel: 'Importance Score',
@@ -790,78 +781,11 @@ async function visualizeFeatureImportance() {
             }
         );
 
-        // Store feature importances globally for later analysis
-        gateWeights = featureImportances;
-
-        console.log('Feature Importance:', importanceData);
+        console.log('Feature importance analysis completed:', featureImportance);
     } catch (error) {
-        console.error('Error visualizing feature importance:', error);
-        const outputDiv = document.getElementById('feature-importance-output');
-        outputDiv.innerHTML = `<p style="color: red;">Error calculating feature importance: ${error.message}</p>`;
+        outputDiv.innerHTML = `Error analyzing feature importance: ${error.message}`;
+        console.error('Feature importance error:', error);
     }
-}
-
-// Create feature importance table with visual bars
-function createFeatureImportanceTable(data) {
-    const table = document.createElement('table');
-
-    // Create header row
-    const headerRow = document.createElement('tr');
-    ['Rank', 'Feature Name', 'Importance Score', 'Percentage', 'Visual'].forEach(header => {
-        const th = document.createElement('th');
-        th.textContent = header;
-        headerRow.appendChild(th);
-    });
-    table.appendChild(headerRow);
-
-    // Create data rows
-    data.forEach(row => {
-        const tr = document.createElement('tr');
-
-        // Add importance-based class for row highlighting
-        if (row.importance >= 0.7) {
-            tr.className = 'high-importance';
-        } else if (row.importance >= 0.4) {
-            tr.className = 'medium-importance';
-        } else {
-            tr.className = 'low-importance';
-        }
-
-        // Rank
-        const rankTd = document.createElement('td');
-        rankTd.textContent = row.rank;
-        tr.appendChild(rankTd);
-
-        // Feature name
-        const featureTd = document.createElement('td');
-        featureTd.textContent = row.feature;
-        featureTd.style.fontWeight = 'bold';
-        tr.appendChild(featureTd);
-
-        // Importance score
-        const importanceTd = document.createElement('td');
-        importanceTd.textContent = row.importance.toFixed(4);
-        tr.appendChild(importanceTd);
-
-        // Percentage
-        const percentTd = document.createElement('td');
-        percentTd.textContent = row.percentage.toFixed(2) + '%';
-        tr.appendChild(percentTd);
-
-        // Visual bar
-        const visualTd = document.createElement('td');
-        const barWidth = Math.max(row.percentage * 2, 5); // Scale to pixels
-        const bar = document.createElement('div');
-        bar.className = 'importance-bar';
-        bar.style.width = barWidth + 'px';
-        bar.title = `${row.percentage.toFixed(2)}%`;
-        visualTd.appendChild(bar);
-        tr.appendChild(visualTd);
-
-        table.appendChild(tr);
-    });
-
-    return table;
 }
 
 // Export results
