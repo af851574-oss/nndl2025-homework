@@ -507,6 +507,9 @@ async function trainModel() {
         // Enable the feature importance button
         document.getElementById('importance-btn').disabled = false;
 
+        // Auto-calculate and display feature importance after training
+        analyzeFeatureImportance();
+
         // Calculate initial metrics
         updateMetrics();
     } catch (error) {
