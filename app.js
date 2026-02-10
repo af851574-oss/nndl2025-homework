@@ -759,16 +759,22 @@ function visualizeFeatureImportance() {
         // Prepare data for visualization
         const importanceData = featureNames.map((name, i) => ({
             feature: name,
-            importance: featureImportances[i]
+            importance: isNaN(featureImportances[i]) ? 0 : featureImportances[i]
         }));
 
         // Sort by importance (descending)
         importanceData.sort((a, b) => b.importance - a.importance);
 
+        // Validate data before visualization
+        if (importanceData.length === 0 || importanceData.every(d => d.importance === 0)) {
+            console.warn('No valid feature importance data to display');
+            return;
+        }
+
         // Visualize with tfjs-vis
         tfvis.render.barchart(
             { name: 'Feature Importance (Sigmoid Gate)', tab: 'Feature Importance' },
-            importanceData.map(d => ({ x: d.feature, y: d.importance })),
+            importanceData.map(d => ({ index: d.feature, value: d.importance })),
             {
                 xLabel: 'Feature',
                 yLabel: 'Importance Score',
@@ -781,7 +787,8 @@ function visualizeFeatureImportance() {
         const topFeatures = importanceData.slice(0, 5);
         let topFeaturesHTML = '<h3>Top 5 Most Important Features</h3><ol>';
         topFeatures.forEach(d => {
-            topFeaturesHTML += `<li><strong>${d.feature}</strong>: ${d.importance.toFixed(4)}</li>`;
+            const importanceValue = typeof d.importance === 'number' ? d.importance.toFixed(4) : '0.0000';
+            topFeaturesHTML += `<li><strong>${d.feature}</strong>: ${importanceValue}</li>`;
         });
         topFeaturesHTML += '</ol>';
 
