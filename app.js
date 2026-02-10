@@ -392,7 +392,7 @@ function oneHotEncode(value, categories) {
     return encoding;
 }
 
-// Create the model with Sigmoid Gate for feature importance
+// Create the model - simple homework version
 function createModel() {
     if (!preprocessedTrainData) {
         alert('Please preprocess data first.');
@@ -410,40 +410,22 @@ function createModel() {
         featureNames.push('FamilySize', 'IsAlone');
     }
 
-    // Create model using Functional API to implement Sigmoid Gate
-    const input = tf.input({shape: [inputShape]});
+    // Create a sequential model
+    model = tf.sequential();
 
-    // Sigmoid Gate Layer: learns feature importance weights
-    // Output shape: same as input (k-dimensional where k = number of features)
-    const gateLayer = tf.layers.dense({
-        units: inputShape,
-        activation: 'sigmoid',
-        name: 'sigmoid_gate',
-        kernelInitializer: 'ones',  // Initialize with ones for neutral start
-        useBias: false
-    });
-
-    const gate = gateLayer.apply(input);
-
-    // Apply gate to input using element-wise multiplication (Hadamard product)
-    const gatedInput = tf.layers.multiply().apply([input, gate]);
-
-    // Hidden layer
-    const hidden = tf.layers.dense({
+    // Add layers
+    model.add(tf.layers.dense({
         units: 16,
         activation: 'relu',
+        inputShape: [inputShape],
         name: 'hidden_layer'
-    }).apply(gatedInput);
+    }));
 
-    // Output layer
-    const output = tf.layers.dense({
+    model.add(tf.layers.dense({
         units: 1,
         activation: 'sigmoid',
         name: 'output_layer'
-    }).apply(hidden);
-
-    // Create the model
-    model = tf.model({inputs: input, outputs: output});
+    }));
 
     // Compile the model
     model.compile({
@@ -454,17 +436,14 @@ function createModel() {
 
     // Display model summary
     const summaryDiv = document.getElementById('model-summary');
-    summaryDiv.innerHTML = '<h3>Model Summary (with Sigmoid Gate for Feature Importance)</h3>';
+    summaryDiv.innerHTML = '<h3>Model Summary</h3>';
 
     let summaryText = '<ul>';
     summaryText += '<li><strong>Input Layer:</strong> ' + inputShape + ' features</li>';
-    summaryText += '<li><strong>Sigmoid Gate Layer:</strong> ' + inputShape + ' units (learns feature importance)</li>';
-    summaryText += '<li><strong>Gated Input:</strong> Element-wise multiplication (Hadamard product)</li>';
     summaryText += '<li><strong>Hidden Layer:</strong> 16 units with ReLU activation</li>';
     summaryText += '<li><strong>Output Layer:</strong> 1 unit with Sigmoid activation (binary classification)</li>';
     summaryText += '</ul>';
     summaryText += `<p>Total parameters: ${model.countParams()}</p>`;
-    summaryText += '<p><em>Note: The sigmoid gate layer learns which features are most important for prediction.</em></p>';
     summaryDiv.innerHTML += summaryText;
 
     // Enable the train button
@@ -720,41 +699,39 @@ function createPredictionTable(data) {
     return table;
 }
 
-// Visualize feature importance from the sigmoid gate layer
+// Visualize feature importance from first layer weights
 async function visualizeFeatureImportance() {
     try {
-        // Get the sigmoid gate layer (first layer after input)
-        const gateLayer = model.getLayer('sigmoid_gate');
+        // Get the first hidden layer
+        const hiddenLayer = model.getLayer('hidden_layer');
 
-        if (!gateLayer) {
-            console.warn('Sigmoid gate layer not found');
+        if (!hiddenLayer) {
+            console.warn('Hidden layer not found');
             return;
         }
 
-        // Create an intermediate model that outputs gate activations
-        // This gives us the actual learned importance for each feature
-        const gateModel = tf.model({
-            inputs: model.input,
-            outputs: gateLayer.output
-        });
+        // Get the weights from the first layer [inputDim, hiddenUnits]
+        const weights = hiddenLayer.getWeights()[0];
+        const weightValues = await weights.arraySync();
 
-        // Pass validation data through the gate to get actual gate values
-        const gateActivations = gateModel.predict(validationData);
-        const gateValues = await gateActivations.arraySync();
+        // Calculate feature importance: sum of absolute weights for each input feature
+        // Each row represents one input feature's connections to all hidden units
+        let featureImportances = [];
 
-        // Calculate average gate value for each feature across all samples
-        // This represents how much each feature is "opened" by the gate on average
-        const numFeatures = gateValues[0].length;
-        let featureImportances = new Array(numFeatures).fill(0);
-
-        for (let i = 0; i < gateValues.length; i++) {
-            for (let j = 0; j < numFeatures; j++) {
-                featureImportances[j] += gateValues[i][j];
+        for (let i = 0; i < weightValues.length; i++) {
+            // Sum absolute values of all weights from this feature to hidden units
+            let importance = 0;
+            for (let j = 0; j < weightValues[i].length; j++) {
+                importance += Math.abs(weightValues[i][j]);
             }
+            featureImportances.push(importance);
         }
 
-        // Average across all samples
-        featureImportances = featureImportances.map(val => val / gateValues.length);
+        // Normalize to [0, 1] range
+        const maxImportance = Math.max(...featureImportances);
+        if (maxImportance > 0) {
+            featureImportances = featureImportances.map(val => val / maxImportance);
+        }
 
         // Prepare data for visualization
         const importanceData = featureNames.map((name, i) => ({
@@ -779,30 +756,31 @@ async function visualizeFeatureImportance() {
         // Display in main window as a table (like Prediction Results)
         const outputDiv = document.getElementById('feature-importance-output');
         outputDiv.innerHTML = '<h3>Feature Importance Analysis</h3>';
-        outputDiv.innerHTML += '<p>Showing importance scores for all features (sorted by importance):</p>';
+        outputDiv.innerHTML += '<p>Showing importance scores for all features based on weight magnitudes (sorted by importance):</p>';
 
         const table = createFeatureImportanceTable(importanceData);
         outputDiv.appendChild(table);
 
         // Show statistics
         const avgImportance = importanceData.reduce((sum, d) => sum + d.importance, 0) / importanceData.length;
-        const maxImportance = Math.max(...importanceData.map(d => d.importance));
-        const minImportance = Math.min(...importanceData.map(d => d.importance));
+        const maxImp = Math.max(...importanceData.map(d => d.importance));
+        const minImp = Math.min(...importanceData.map(d => d.importance));
 
         outputDiv.innerHTML += `
             <div class="note">
                 <p><strong>Statistics:</strong></p>
                 <ul>
-                    <li>Maximum Importance: ${maxImportance.toFixed(4)} (${(maxImportance * 100).toFixed(2)}%)</li>
-                    <li>Minimum Importance: ${minImportance.toFixed(4)} (${(minImportance * 100).toFixed(2)}%)</li>
+                    <li>Maximum Importance: ${maxImp.toFixed(4)} (${(maxImp * 100).toFixed(2)}%)</li>
+                    <li>Minimum Importance: ${minImp.toFixed(4)} (${(minImp * 100).toFixed(2)}%)</li>
                     <li>Average Importance: ${avgImportance.toFixed(4)} (${(avgImportance * 100).toFixed(2)}%)</li>
                 </ul>
+                <p><em>Method: Feature importance calculated from sum of absolute weights in the first hidden layer.</em></p>
             </div>
         `;
 
         // Also visualize with tfjs-vis chart
         tfvis.render.barchart(
-            { name: 'Feature Importance (Sigmoid Gate)', tab: 'Feature Importance' },
+            { name: 'Feature Importance (Weight Magnitude)', tab: 'Feature Importance' },
             importanceData.map(d => ({ index: d.feature, value: d.importance })),
             {
                 xLabel: 'Feature',
@@ -812,11 +790,8 @@ async function visualizeFeatureImportance() {
             }
         );
 
-        // Store gate weights globally for later analysis
+        // Store feature importances globally for later analysis
         gateWeights = featureImportances;
-
-        // Clean up tensors
-        gateActivations.dispose();
 
         console.log('Feature Importance:', importanceData);
     } catch (error) {
